@@ -1,8 +1,10 @@
+import 'package:buzzoff/Citizens/SigInPage.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'complains.dart';
 import 'analytics.dart';
+import 'EditProfile.dart'; // ✅ make sure the path is correct
 
 class MapsPage extends StatefulWidget {
   const MapsPage({super.key});
@@ -32,13 +34,25 @@ class _MapsPageState extends State<MapsPage> {
       if (doc.exists) {
         final data = doc.data();
         setState(() {
-          _username = data?['username'] ?? 'User'; // ✅ fixed
+          _username = data?['username'] ?? 'User';
         });
       }
     }
   }
 
-  void _handleMenuSelection(String value) {}
+  void _handleMenuSelection(String value) {
+    if (value == 'edit') {
+      Navigator.push(
+        context,
+        MaterialPageRoute(builder: (_) => const EditAccountPage()),
+      );
+    } else if (value == 'SignOut') {
+      Navigator.push(
+        context,
+        MaterialPageRoute(builder: (_) => const SignInPage()),
+      );
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -86,8 +100,8 @@ class _MapsPageState extends State<MapsPage> {
                             child: Text('Edit Profile'),
                           ),
                           const PopupMenuItem(
-                            value: 'delete',
-                            child: Text('Delete Profile'),
+                            value: 'SignOut',
+                            child: Text('SignOut Of Profile'),
                           ),
                         ],
                       ),

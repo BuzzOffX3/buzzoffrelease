@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 
@@ -14,35 +15,67 @@ class _RegisterPageState extends State<RegisterPage> {
   final _firestore = FirebaseFirestore.instance;
 
   final nameController = TextEditingController();
+  final usernameController = TextEditingController();
   final phoneController = TextEditingController();
   final emailController = TextEditingController();
   final addressController = TextEditingController();
   final passwordController = TextEditingController();
   final confirmPasswordController = TextEditingController();
 
+  final List<String> districts = ['Colombo', 'Gampaha', 'Kandy'];
+  final List<String> cities = ['City 1', 'City 2', 'City 3'];
+
+  String? selectedDistrict;
+  String? selectedCity;
+
   bool isLoading = false;
 
   void _register() async {
     final name = nameController.text.trim();
+    final username = usernameController.text.trim();
     final phone = phoneController.text.trim();
     final email = emailController.text.trim();
     final address = addressController.text.trim();
     final password = passwordController.text;
     final confirmPassword = confirmPasswordController.text;
 
-    // Validate inputs
     if ([
-      name,
-      phone,
-      email,
-      address,
-      password,
-      confirmPassword,
-    ].any((e) => e.isEmpty)) {
-      _showMessage("Please fill all fields");
+          name,
+          username,
+          phone,
+          email,
+          address,
+          password,
+          confirmPassword,
+        ].any((e) => e.isEmpty) ||
+        selectedDistrict == null ||
+        selectedCity == null) {
+      showDialog(
+        context: context,
+        builder: (context) => AlertDialog(
+          backgroundColor: Colors.black,
+          title: const Text(
+            'Field Required',
+            style: TextStyle(color: Colors.yellowAccent),
+          ),
+          content: const Text(
+            'Please fill in all fields.',
+            style: TextStyle(color: Colors.white),
+          ),
+          actions: [
+            TextButton(
+              child: const Text(
+                'OK',
+                style: TextStyle(color: Color(0xFFD9ADF7)),
+              ),
+              onPressed: () => Navigator.of(context).pop(),
+            ),
+          ],
+        ),
+      );
       return;
     }
-    if (phone.length < 10) {
+    if (!RegExp(r'^\d{10}$').hasMatch(phone)) {
       _showMessage("Invalid phone number");
       return;
     }
@@ -62,17 +95,20 @@ class _RegisterPageState extends State<RegisterPage> {
 
       await _firestore.collection('users').doc(uid).set({
         'uid': uid,
-        'username': name,
+        'name': name,
+        'username': username,
         'phone': phone,
         'email': email,
         'address': address,
+        'district': selectedDistrict,
+        'city': selectedCity,
         'role': 'citizen',
         'createdAt': FieldValue.serverTimestamp(),
       });
 
       if (!mounted) return;
       _showMessage("Registration Successful");
-      Navigator.pop(context); // Go back to sign in
+      Navigator.pop(context);
     } on FirebaseAuthException catch (e) {
       String msg = "Registration failed";
       if (e.code == 'email-already-in-use') {
@@ -118,13 +154,22 @@ class _RegisterPageState extends State<RegisterPage> {
         child: Column(
           children: [
             const SizedBox(height: 30),
-            const Text(
-              'Create Account',
-              style: TextStyle(
-                color: Colors.white,
-                fontSize: 24,
-                fontWeight: FontWeight.bold,
-              ),
+            Row(
+              children: [
+                IconButton(
+                  onPressed: () => Navigator.pop(context),
+                  icon: const Icon(Icons.arrow_back, color: Colors.white),
+                ),
+                const SizedBox(width: 10),
+                const Text(
+                  'Create Account',
+                  style: TextStyle(
+                    color: Colors.white,
+                    fontSize: 24,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+              ],
             ),
             const SizedBox(height: 20),
             Image.asset('images/logo.png', width: 100, height: 100),
@@ -133,6 +178,13 @@ class _RegisterPageState extends State<RegisterPage> {
             TextField(
               controller: nameController,
               decoration: _inputDecoration('Full Name'),
+              style: const TextStyle(color: Colors.white),
+            ),
+            const SizedBox(height: 15),
+
+            TextField(
+              controller: usernameController,
+              decoration: _inputDecoration('Username'),
               style: const TextStyle(color: Colors.white),
             ),
             const SizedBox(height: 15),
@@ -154,6 +206,44 @@ class _RegisterPageState extends State<RegisterPage> {
                     decoration: _inputDecoration('Email'),
                     style: const TextStyle(color: Colors.white),
                     keyboardType: TextInputType.emailAddress,
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 15),
+
+            Row(
+              children: [
+                Expanded(
+                  child: DropdownButtonFormField<String>(
+                    value: selectedDistrict,
+                    items: districts
+                        .map((d) => DropdownMenuItem(value: d, child: Text(d)))
+                        .toList(),
+                    onChanged: (value) {
+                      setState(() => selectedDistrict = value);
+                    },
+                    decoration: _inputDecoration('District'),
+                    dropdownColor: Colors.grey[900],
+                    style: const TextStyle(color: Colors.white),
+                  ),
+                ),
+                const SizedBox(width: 15),
+                Expanded(
+                  child: DropdownButtonFormField<String>(
+                    value: selectedCity,
+                    items: cities
+                        .map((c) => DropdownMenuItem(value: c, child: Text(c)))
+                        .toList(),
+                    onChanged: (value) {
+                      setState(() => selectedCity = value);
+                    },
+                    decoration: _inputDecoration('City'),
+                    dropdownColor: Colors.grey[900],
+                    style: const TextStyle(color: Colors.white),
+                    isExpanded: true,
+                    menuMaxHeight: 200,
+                    borderRadius: BorderRadius.circular(20),
                   ),
                 ),
               ],

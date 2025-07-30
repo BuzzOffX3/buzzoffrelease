@@ -17,6 +17,33 @@ class _SignInPageState extends State<SignInPage> {
   bool isLoading = false;
 
   Future<void> _signIn() async {
+    if (emailController.text.trim().isEmpty ||
+        passwordController.text.trim().isEmpty) {
+      showDialog(
+        context: context,
+        builder: (context) => AlertDialog(
+          backgroundColor: Colors.black,
+          title: const Text(
+            'Fields Required',
+            style: TextStyle(color: Colors.yellowAccent),
+          ),
+          content: const Text(
+            'Please fill in both email and password fields.',
+            style: TextStyle(color: Colors.white),
+          ),
+          actions: [
+            TextButton(
+              child: const Text(
+                'OK',
+                style: TextStyle(color: Color(0xFFD9ADF7)),
+              ),
+              onPressed: () => Navigator.of(context).pop(),
+            ),
+          ],
+        ),
+      );
+      return;
+    }
     setState(() => isLoading = true);
     try {
       final auth = FirebaseAuth.instance;
@@ -41,9 +68,29 @@ class _SignInPageState extends State<SignInPage> {
         ).showSnackBar(const SnackBar(content: Text('User data not found.')));
       }
     } catch (e) {
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(SnackBar(content: Text('Error: $e')));
+      showDialog(
+        context: context,
+        builder: (context) => AlertDialog(
+          backgroundColor: Colors.black,
+          title: const Text(
+            'Sign In Failed',
+            style: TextStyle(color: Colors.redAccent),
+          ),
+          content: const Text(
+            'OH NOOOOOOOOOOOOOO! Your Account Info seems to be wrong,please try again X>',
+            style: TextStyle(color: Colors.white),
+          ),
+          actions: [
+            TextButton(
+              child: const Text(
+                'OK',
+                style: TextStyle(color: Color(0xFFD9ADF7)),
+              ),
+              onPressed: () => Navigator.of(context).pop(),
+            ),
+          ],
+        ),
+      );
     } finally {
       setState(() => isLoading = false);
     }
@@ -73,12 +120,14 @@ class _SignInPageState extends State<SignInPage> {
                 const SizedBox(height: 30),
                 TextField(
                   controller: emailController,
+                  style: const TextStyle(color: Colors.black),
                   decoration: _inputStyle('Email'),
                 ),
                 const SizedBox(height: 16),
                 TextField(
                   controller: passwordController,
                   obscureText: true,
+                  style: const TextStyle(color: Colors.black),
                   decoration: _inputStyle('Password'),
                 ),
                 const SizedBox(height: 30),

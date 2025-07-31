@@ -67,7 +67,7 @@ class _EditAccountPageState extends State<EditAccountPage> {
                 children: [
                   GestureDetector(
                     onTap: () => Navigator.pop(context),
-                    child: Image.asset('images/arrow.png', width: 30),
+                    child: Image.asset('images/back.jpg', width: 30),
                   ),
                   const SizedBox(width: 12),
                   const Text(
@@ -81,7 +81,7 @@ class _EditAccountPageState extends State<EditAccountPage> {
                 ],
               ),
               const SizedBox(height: 24),
-              Center(child: Image.asset('images/editpfp.png', height: 70)),
+              Center(child: Image.asset('images/edit.jpg', height: 70)),
               const SizedBox(height: 24),
 
               buildTextField(fullNameController, 'Full Name'),

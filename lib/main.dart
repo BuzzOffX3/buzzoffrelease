@@ -16,9 +16,9 @@ class MyApp extends StatelessWidget {
   Widget build(BuildContext context) {
     return MaterialApp(
       title: 'BuzzOff',
-      theme: ThemeData.dark(), // or your custom theme
+      theme: ThemeData.dark(),
       debugShowCheckedModeBanner: false,
-      home: const SignInPage(), // or RegisterPage for testing
+      home: const SignInPage(),
     );
   }
 }

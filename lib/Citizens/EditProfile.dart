@@ -38,8 +38,7 @@ class _EditAccountPageState extends State<EditAccountPage> {
       final data = doc.data();
       if (data != null) {
         setState(() {
-          fullNameController.text =
-              data['name'] ?? ''; // name instead of fullName
+          fullNameController.text = data['name'] ?? '';
           usernameController.text = data['username'] ?? '';
           phoneController.text = data['phone'] ?? '';
           emailController.text = data['email'] ?? '';

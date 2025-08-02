@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'SigInPage.dart';
 
 class EditAccountPage extends StatefulWidget {
   const EditAccountPage({super.key});
@@ -50,6 +51,67 @@ class _EditAccountPageState extends State<EditAccountPage> {
         });
       }
     }
+  }
+
+  Future<String?> getPasswordFromUser() async {
+    String? password;
+    await showDialog(
+      context: context,
+      builder: (context) {
+        final controller = TextEditingController();
+        return AlertDialog(
+          backgroundColor: Colors.grey[900],
+          title: const Text(
+            'Re-enter Password',
+            style: TextStyle(color: Colors.white),
+          ),
+          content: TextField(
+            controller: controller,
+            obscureText: true,
+            style: const TextStyle(color: Colors.white),
+            decoration: const InputDecoration(
+              hintText: 'Password',
+              hintStyle: TextStyle(color: Colors.grey),
+            ),
+          ),
+          actions: [
+            TextButton(
+              child: const Text('Cancel', style: TextStyle(color: Colors.grey)),
+              onPressed: () => Navigator.pop(context),
+            ),
+            TextButton(
+              child: const Text(
+                'Delete',
+                style: TextStyle(color: Colors.white),
+              ),
+              onPressed: () {
+                password = controller.text;
+                Navigator.pop(context);
+              },
+            ),
+          ],
+        );
+      },
+    );
+    return password;
+  }
+
+  Future<bool> reAuthenticateUser(String password) async {
+    final user = FirebaseAuth.instance.currentUser;
+    if (user != null && user.email != null) {
+      try {
+        final cred = EmailAuthProvider.credential(
+          email: user.email!,
+          password: password,
+        );
+        await user.reauthenticateWithCredential(cred);
+        return true;
+      } catch (e) {
+        print('Re-authentication failed: $e');
+        return false;
+      }
+    }
+    return false;
   }
 
   @override
@@ -191,6 +253,28 @@ class _EditAccountPageState extends State<EditAccountPage> {
                 if (confirm == true) {
                   final user = FirebaseAuth.instance.currentUser;
                   if (user != null) {
+                    final password = await getPasswordFromUser();
+                    if (password == null || password.isEmpty) {
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        const SnackBar(
+                          content: Text(
+                            'Password is required to delete account',
+                          ),
+                        ),
+                      );
+                      return;
+                    }
+
+                    bool success = await reAuthenticateUser(password);
+                    if (!success) {
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        const SnackBar(
+                          content: Text('Re-authentication failed'),
+                        ),
+                      );
+                      return;
+                    }
+
                     await FirebaseFirestore.instance
                         .collection('users')
                         .doc(user.uid)
@@ -198,7 +282,13 @@ class _EditAccountPageState extends State<EditAccountPage> {
                     await user.delete();
 
                     if (context.mounted) {
-                      Navigator.pop(context);
+                      Navigator.of(context).pushAndRemoveUntil(
+                        MaterialPageRoute(
+                          builder: (context) => const SignInPage(),
+                        ),
+                        (Route<dynamic> route) => false,
+                      );
+
                       ScaffoldMessenger.of(context).showSnackBar(
                         const SnackBar(
                           content: Text('Account deleted successfully'),
@@ -272,9 +362,12 @@ class _EditAccountPageState extends State<EditAccountPage> {
           ),
         ),
         onChanged: onChanged,
-        items: items.map((item) {
-          return DropdownMenuItem<String>(value: item, child: Text(item));
-        }).toList(),
+        items: items
+            .map(
+              (item) =>
+                  DropdownMenuItem<String>(value: item, child: Text(item)),
+            )
+            .toList(),
       ),
     );
   }

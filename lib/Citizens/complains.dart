@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
 import 'dart:io';
-//import 'package:firebase_storage/firebase_storage.dart';
+import 'package:firebase_storage/firebase_storage.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'MapsPage.dart';
@@ -20,6 +20,7 @@ class _ComplainsPageState extends State<ComplainsPage> {
   final _locationController = TextEditingController();
   File? _selectedImage;
   String _username = '';
+  bool _isSubmitting = false;
 
   @override
   void initState() {
@@ -53,6 +54,22 @@ class _ComplainsPageState extends State<ComplainsPage> {
     }
   }
 
+  Future<String?> _uploadImage(File imageFile) async {
+    try {
+      final user = FirebaseAuth.instance.currentUser;
+      if (user == null) return null;
+
+      final fileName =
+          'complaints/${user.uid}_${DateTime.now().millisecondsSinceEpoch}.jpg';
+      final ref = FirebaseStorage.instance.ref().child(fileName);
+      await ref.putFile(imageFile);
+      return await ref.getDownloadURL();
+    } catch (e) {
+      print('❌ Image upload failed: $e');
+      return null;
+    }
+  }
+
   Future<void> _submitComplaint() async {
     if (_descriptionController.text.isEmpty ||
         _locationController.text.isEmpty) {
@@ -70,12 +87,19 @@ class _ComplainsPageState extends State<ComplainsPage> {
       return;
     }
 
+    setState(() => _isSubmitting = true);
+
+    String? imageUrl;
+    if (_selectedImage != null) {
+      imageUrl = await _uploadImage(_selectedImage!);
+    }
+
     await FirebaseFirestore.instance.collection('complaints').add({
       'userId': user.uid,
       'description': _descriptionController.text,
       'location': _locationController.text,
       'isAnonymous': _isAnonymous,
-      'imageUrl': null,
+      'imageUrl': imageUrl,
       'timestamp': Timestamp.now(),
     });
 
@@ -88,6 +112,7 @@ class _ComplainsPageState extends State<ComplainsPage> {
     setState(() {
       _selectedImage = null;
       _isAnonymous = false;
+      _isSubmitting = false;
     });
   }
 
@@ -297,9 +322,7 @@ class _ComplainsPageState extends State<ComplainsPage> {
                   Checkbox(
                     value: _isAnonymous,
                     onChanged: (value) {
-                      setState(() {
-                        _isAnonymous = value!;
-                      });
+                      setState(() => _isAnonymous = value!);
                     },
                     activeColor: Colors.deepPurple,
                     checkColor: Colors.white,
@@ -314,7 +337,7 @@ class _ComplainsPageState extends State<ComplainsPage> {
               SizedBox(
                 width: double.infinity,
                 child: ElevatedButton(
-                  onPressed: _submitComplaint,
+                  onPressed: _isSubmitting ? null : _submitComplaint,
                   style: ElevatedButton.styleFrom(
                     backgroundColor: Colors.deepPurple,
                     padding: const EdgeInsets.symmetric(vertical: 15),
@@ -322,7 +345,9 @@ class _ComplainsPageState extends State<ComplainsPage> {
                       borderRadius: BorderRadius.circular(10),
                     ),
                   ),
-                  child: const Text('Submit', style: TextStyle(fontSize: 16)),
+                  child: _isSubmitting
+                      ? const CircularProgressIndicator(color: Colors.white)
+                      : const Text('Submit', style: TextStyle(fontSize: 16)),
                 ),
               ),
             ],

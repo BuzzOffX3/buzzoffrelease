@@ -2,9 +2,10 @@ import 'package:buzzoff/Citizens/SigInPage.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
+import 'package:intl/intl.dart';
 import 'complains.dart';
 import 'analytics.dart';
-import 'EditProfile.dart'; // ✅ make sure the path is correct
+import 'EditProfile.dart'; // ✅ ensure path
 
 class MapsPage extends StatefulWidget {
   const MapsPage({super.key});
@@ -40,18 +41,221 @@ class _MapsPageState extends State<MapsPage> {
     }
   }
 
-  void _handleMenuSelection(String value) {
-    if (value == 'edit') {
-      Navigator.push(
-        context,
-        MaterialPageRoute(builder: (_) => const EditAccountPage()),
-      );
-    } else if (value == 'SignOut') {
-      Navigator.push(
-        context,
-        MaterialPageRoute(builder: (_) => const SignInPage()),
-      );
+  // ---------- Helpers ----------
+  Color _statusBg(String s) {
+    switch ((s).toLowerCase()) {
+      case 'pending':
+        return const Color(0xFF3A2A52); // purple-ish
+      case 'review':
+        return const Color(0xFF324559); // blue-ish
+      case 'under investigation':
+        return const Color(0xFF5A3D2E); // brown-ish
+      case 'reviewed':
+        return const Color(0xFF2F4A3A); // green-ish
+      default:
+        return const Color(0xFF444444);
     }
+  }
+
+  Color _statusText(String s) {
+    switch ((s).toLowerCase()) {
+      case 'pending':
+        return const Color(0xFFE4CCFF);
+      case 'review':
+        return const Color(0xFFBFD9FF);
+      case 'under investigation':
+        return const Color(0xFFF3D1B8);
+      case 'reviewed':
+        return const Color(0xFFBFE8CF);
+      default:
+        return Colors.white;
+    }
+  }
+
+  String _fmtTs(Timestamp? ts) {
+    if (ts == null) return '-';
+    return DateFormat('yyyy-MM-dd • HH:mm').format(ts.toDate());
+  }
+
+  Widget _statusChip(String status) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+      decoration: BoxDecoration(
+        color: _statusBg(status),
+        borderRadius: BorderRadius.circular(20),
+      ),
+      child: Text(
+        status,
+        style: TextStyle(
+          color: _statusText(status),
+          fontWeight: FontWeight.w600,
+          fontSize: 12,
+        ),
+      ),
+    );
+  }
+
+  // ---------- Complaints Table ----------
+  Widget _buildComplaintsTable() {
+    final user = FirebaseAuth.instance.currentUser;
+    if (user == null) return const SizedBox();
+
+    final stream = FirebaseFirestore.instance
+        .collection('complaints')
+        .where('uid', isEqualTo: user.uid)
+        .orderBy('timestamp', descending: true)
+        .snapshots();
+
+    return StreamBuilder<QuerySnapshot>(
+      stream: stream,
+      builder: (context, snap) {
+        if (snap.connectionState == ConnectionState.waiting) {
+          return Container(
+            padding: const EdgeInsets.all(16),
+            decoration: BoxDecoration(
+              color: const Color(0xFF16161C),
+              borderRadius: BorderRadius.circular(14),
+            ),
+            child: const Center(
+              child: CircularProgressIndicator(color: Colors.white),
+            ),
+          );
+        }
+
+        if (snap.hasError) {
+          return Container(
+            padding: const EdgeInsets.all(16),
+            decoration: BoxDecoration(
+              color: const Color(0xFF16161C),
+              borderRadius: BorderRadius.circular(14),
+            ),
+            child: const Text(
+              'Failed to load your complaints.',
+              style: TextStyle(color: Colors.white70),
+            ),
+          );
+        }
+
+        final docs = snap.data?.docs ?? [];
+        if (docs.isEmpty) {
+          return Container(
+            padding: const EdgeInsets.all(20),
+            decoration: BoxDecoration(
+              color: const Color(0xFF16161C),
+              borderRadius: BorderRadius.circular(14),
+            ),
+            child: const Center(
+              child: Text(
+                "You haven't made any complaints yet.",
+                style: TextStyle(color: Colors.white70),
+              ),
+            ),
+          );
+        }
+
+        final rows = docs.map((d) {
+          final data = d.data() as Map<String, dynamic>? ?? {};
+          final ts = data['timestamp'] as Timestamp?;
+          final desc = (data['description'] ?? '') as String;
+          final moh = (data['moh_area'] ?? '-') as String;
+          final loc = (data['location'] ?? '-') as String;
+          final status = ((data['status'] ?? 'Pending') as String);
+          final imageUrl = data['imageUrl'] as String?;
+
+          return DataRow(
+            cells: [
+              DataCell(
+                Text(_fmtTs(ts), style: const TextStyle(color: Colors.white)),
+              ),
+              DataCell(
+                Tooltip(
+                  message: desc,
+                  child: SizedBox(
+                    width: 220,
+                    child: Text(
+                      desc,
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(color: Colors.white),
+                    ),
+                  ),
+                ),
+              ),
+              DataCell(Text(moh, style: const TextStyle(color: Colors.white))),
+              DataCell(
+                SizedBox(
+                  width: 160,
+                  child: Text(
+                    loc,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(color: Colors.white),
+                  ),
+                ),
+              ),
+              DataCell(_statusChip(status)),
+              DataCell(
+                imageUrl == null
+                    ? const Text('-', style: TextStyle(color: Colors.white70))
+                    : TextButton(
+                        onPressed: () {
+                          showDialog(
+                            context: context,
+                            builder: (_) => Dialog(
+                              backgroundColor: Colors.black,
+                              child: InteractiveViewer(
+                                child: Image.network(
+                                  imageUrl,
+                                  fit: BoxFit.contain,
+                                ),
+                              ),
+                            ),
+                          );
+                        },
+                        child: const Text(
+                          'View',
+                          style: TextStyle(color: Colors.white),
+                        ),
+                      ),
+              ),
+            ],
+          );
+        }).toList();
+
+        return Container(
+          decoration: BoxDecoration(
+            color: const Color(0xFF16161C),
+            borderRadius: BorderRadius.circular(14),
+            border: Border.all(color: const Color(0xFF2C2C35)),
+          ),
+          child: SingleChildScrollView(
+            scrollDirection: Axis.horizontal,
+            child: DataTable(
+              headingRowHeight: 44,
+              dataRowMinHeight: 48,
+              dataRowMaxHeight: 68,
+              columnSpacing: 20,
+              headingTextStyle: const TextStyle(
+                color: Colors.white,
+                fontWeight: FontWeight.w700,
+              ),
+              headingRowColor: WidgetStateColor.resolveWith(
+                (_) => const Color(0xFF1C1C22),
+              ),
+              columns: const [
+                DataColumn(label: Text('Date')),
+                DataColumn(label: Text('Description')),
+                DataColumn(label: Text('MOH Area')),
+                DataColumn(label: Text('Location')),
+                DataColumn(label: Text('Status')),
+                DataColumn(label: Text('Image')),
+              ],
+              rows: rows,
+            ),
+          ),
+        );
+      },
+    );
   }
 
   @override
@@ -87,23 +291,16 @@ class _MapsPageState extends State<MapsPage> {
                         _username,
                         style: const TextStyle(color: Colors.white),
                       ),
-                      PopupMenuButton<String>(
-                        icon: const Icon(
-                          Icons.keyboard_arrow_down,
-                          color: Colors.white,
-                        ),
-                        color: Colors.grey[900],
-                        onSelected: _handleMenuSelection,
-                        itemBuilder: (context) => [
-                          const PopupMenuItem(
-                            value: 'edit',
-                            child: Text('Edit Profile'),
-                          ),
-                          const PopupMenuItem(
-                            value: 'SignOut',
-                            child: Text('SignOut Of Profile'),
-                          ),
-                        ],
+                      _ProfileMenu(
+                        onEdit: () {
+                          Navigator.push(
+                            context,
+                            MaterialPageRoute(
+                              builder: (_) => const EditAccountPage(),
+                            ),
+                          );
+                        },
+                        onSignOut: () => _signOutAndGoToLogin(context),
                       ),
                     ],
                   ),
@@ -179,7 +376,21 @@ class _MapsPageState extends State<MapsPage> {
 
               const SizedBox(height: 24),
 
-              // Tips Section
+              // ---------- Your Complaints Table (moved up) ----------
+              const Text(
+                'Your Complaints',
+                style: TextStyle(
+                  color: Color(0xFFDAA8F4),
+                  fontSize: 18,
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
+              const SizedBox(height: 12),
+              _buildComplaintsTable(),
+
+              const SizedBox(height: 28),
+
+              // Tips Section (carousel) — now below table
               SizedBox(
                 height: 170,
                 child: Column(
@@ -281,6 +492,108 @@ class _NavIcon extends StatelessWidget {
           ],
         ),
       ),
+    );
+  }
+}
+
+// ===== Pretty Profile Menu + Sign-out helper =====
+
+enum _ProfileAction { edit, signOut }
+
+Future<void> _signOutAndGoToLogin(BuildContext context) async {
+  try {
+    await FirebaseAuth.instance.signOut();
+  } catch (_) {}
+  if (context.mounted) {
+    Navigator.pushAndRemoveUntil(
+      context,
+      MaterialPageRoute(builder: (_) => const SignInPage()),
+      (_) => false,
+    );
+  }
+}
+
+class _ProfileMenu extends StatelessWidget {
+  final VoidCallback onEdit;
+  final VoidCallback onSignOut;
+
+  const _ProfileMenu({
+    required this.onEdit,
+    required this.onSignOut,
+    super.key,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return PopupMenuButton<_ProfileAction>(
+      tooltip: 'Profile menu',
+      offset: const Offset(0, 12),
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(14),
+        side: const BorderSide(color: Color(0xFF2C2C35)),
+      ),
+      elevation: 6,
+      color: const Color(0xFF16161C), // dark panel bg
+      icon: const Icon(Icons.keyboard_arrow_down, color: Colors.white),
+      itemBuilder: (context) => [
+        PopupMenuItem<_ProfileAction>(
+          value: _ProfileAction.edit,
+          padding: EdgeInsets.zero,
+          child: ListTile(
+            leading: const Icon(Icons.edit_outlined, color: Colors.white),
+            title: const Text(
+              'Edit Profile',
+              style: TextStyle(
+                color: Colors.white,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+            subtitle: const Text(
+              'Update your details',
+              style: TextStyle(color: Colors.white70, fontSize: 12),
+            ),
+            dense: false,
+            contentPadding: const EdgeInsets.symmetric(
+              horizontal: 14,
+              vertical: 4,
+            ),
+          ),
+        ),
+        const PopupMenuDivider(height: 6),
+        PopupMenuItem<_ProfileAction>(
+          value: _ProfileAction.signOut,
+          padding: EdgeInsets.zero,
+          child: ListTile(
+            leading: const Icon(Icons.logout_rounded, color: Color(0xFFFF6B6B)),
+            title: const Text(
+              'Sign out',
+              style: TextStyle(
+                color: Color(0xFFFF6B6B),
+                fontWeight: FontWeight.w700,
+              ),
+            ),
+            subtitle: const Text(
+              'See you soon! 👋',
+              style: TextStyle(color: Colors.white70, fontSize: 12),
+            ),
+            dense: false,
+            contentPadding: const EdgeInsets.symmetric(
+              horizontal: 14,
+              vertical: 4,
+            ),
+          ),
+        ),
+      ],
+      onSelected: (value) {
+        switch (value) {
+          case _ProfileAction.edit:
+            onEdit();
+            break;
+          case _ProfileAction.signOut:
+            onSignOut();
+            break;
+        }
+      },
     );
   }
 }

@@ -1,3 +1,4 @@
+import 'package:buzzoff/Citizens/migrate.dart';
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
@@ -19,31 +20,14 @@ class _SignInPageState extends State<SignInPage> {
   Future<void> _signIn() async {
     if (emailController.text.trim().isEmpty ||
         passwordController.text.trim().isEmpty) {
-      showDialog(
-        context: context,
-        builder: (context) => AlertDialog(
-          backgroundColor: Colors.black,
-          title: const Text(
-            'Fields Required',
-            style: TextStyle(color: Colors.yellowAccent),
-          ),
-          content: const Text(
-            'Please fill in both email and password fields.',
-            style: TextStyle(color: Colors.white),
-          ),
-          actions: [
-            TextButton(
-              child: const Text(
-                'OK',
-                style: TextStyle(color: Color(0xFFD9ADF7)),
-              ),
-              onPressed: () => Navigator.of(context).pop(),
-            ),
-          ],
-        ),
+      _showDialog(
+        title: 'Fields Required',
+        titleColor: Colors.yellowAccent,
+        message: 'Please fill in both email and password fields.',
       );
       return;
     }
+
     setState(() => isLoading = true);
     try {
       final auth = FirebaseAuth.instance;
@@ -54,46 +38,68 @@ class _SignInPageState extends State<SignInPage> {
         password: passwordController.text.trim(),
       );
 
-      final uid = credential.user!.uid;
-      final userDoc = await firestore.collection('users').doc(uid).get();
+      final user = credential.user!;
+      // Force refresh claims to be safe
+      final idToken = await user.getIdTokenResult(true);
+      String? role = (idToken.claims?['role'] as String?);
 
-      if (userDoc.exists) {
+      // Fallback to Firestore users/{uid}.role if claim missing
+      if (role == null) {
+        final uid = user.uid;
+        final snap = await firestore.collection('users').doc(uid).get();
+        if (snap.exists) {
+          role = (snap.data()?['role'] as String?);
+        }
+      }
+
+      if (role == 'citizen') {
+        // ✅ Citizens go to the mobile app (Maps)
+        if (!mounted) return;
         Navigator.pushReplacement(
           context,
           MaterialPageRoute(builder: (_) => const MapsPage()),
         );
       } else {
-        ScaffoldMessenger.of(
+        // 🚫 Everyone else gets a “Use the web app” page
+        if (!mounted) return;
+        Navigator.pushReplacement(
           context,
-        ).showSnackBar(const SnackBar(content: Text('User data not found.')));
+          MaterialPageRoute(
+            builder: (_) => MigrateToWebPage(role: role ?? 'unknown'),
+          ),
+        );
       }
     } catch (e) {
-      showDialog(
-        context: context,
-        builder: (context) => AlertDialog(
-          backgroundColor: Colors.black,
-          title: const Text(
-            'Sign In Failed',
-            style: TextStyle(color: Colors.redAccent),
-          ),
-          content: const Text(
-            'OH NOOOOOOOOOOOOOO! Your Account Info seems to be wrong,please try again X>',
-            style: TextStyle(color: Colors.white),
-          ),
-          actions: [
-            TextButton(
-              child: const Text(
-                'OK',
-                style: TextStyle(color: Color(0xFFD9ADF7)),
-              ),
-              onPressed: () => Navigator.of(context).pop(),
-            ),
-          ],
-        ),
+      _showDialog(
+        title: 'Sign In Failed',
+        titleColor: Colors.redAccent,
+        message:
+            'OH NOOOOOOOOOOOOOO! Your Account Info seems to be wrong, please try again X>',
       );
     } finally {
-      setState(() => isLoading = false);
+      if (mounted) setState(() => isLoading = false);
     }
+  }
+
+  void _showDialog({
+    required String title,
+    required String message,
+    Color titleColor = Colors.white,
+  }) {
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        backgroundColor: Colors.black,
+        title: Text(title, style: TextStyle(color: titleColor)),
+        content: Text(message, style: const TextStyle(color: Colors.white)),
+        actions: [
+          TextButton(
+            child: const Text('OK', style: TextStyle(color: Color(0xFFD9ADF7))),
+            onPressed: () => Navigator.of(context).pop(),
+          ),
+        ],
+      ),
+    );
   }
 
   @override
